@@ -2,7 +2,7 @@
 
 [package]
 name = "lies"
-version = "0.0.0-rc1"
+version = "0.0.1"
 authors = ["MaulingMonkey <git@maulingmonkey.com>"]
 edition = "2018"
 description = "LIcense Embedding System"
@@ -14,4 +14,4 @@ include = ["/src/**/*", "/Cargo.toml", "/LICENSE-MIT", "/LICENSE-APACHE"]
 
 [dependencies]
 proc-macro-hack = "0.5"
-lies-impl       = { version = "0.0.0-rc1", path = "../lies-impl" }
+lies-impl       = { version = "0.0.1", path = "../lies-impl" }
