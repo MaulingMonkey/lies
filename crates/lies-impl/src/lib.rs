@@ -1,5 +1,7 @@
 //! [lies](https://docs.rs/lies/) implementation details.
 
+const CARGO_ABOUT_REV : &'static str = "6b2a876910a98cfc48f68468b101bc2dfaed6cca";
+
 extern crate proc_macro;
 
 use proc_macro_hack::*;
@@ -22,13 +24,12 @@ pub fn licenses_ansi(_input: TokenStream) -> TokenStream {
 }
 
 fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
-    let rev = "743f3c99c673e29ef0f011fb4d98830d4d25a620";
-    let cargo_about = ensure_cargo_about_installed(rev);
+    let cargo_about = ensure_cargo_about_installed(CARGO_ABOUT_REV);
     ensure_about_toml_exists();
 
     let tmp_template_path = std::env::temp_dir().join(format!("{}-{}-{}",
-        PathBuf::from(get_env_os("CARGO_PKG_NAME"   )).display(),
-        PathBuf::from(get_env_os("CARGO_PKG_VERSION")).display(),
+        get_env_path("CARGO_PKG_NAME"   ).display(),
+        get_env_path("CARGO_PKG_VERSION").display(),
         input_name
     ));
 
@@ -37,11 +38,14 @@ fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
         .write_all(input_text)
         .expect("Unable to write entire temporary .hbs file");
 
-    let output = cmd_output(format!(
-        "{} about generate {}",
-        cargo_about.display(),
-        tmp_template_path.display()
-    ).as_str()).expect("Failed to 'cargo about generate ...'");
+    let output = match cmd_output(format!("{} about generate {}", cargo_about.display(), tmp_template_path.display()).as_str()) {
+        Ok(o) => o,
+        Err(err) => {
+            eprintln!("Failed to '{} about generate {}'", cargo_about.display(), tmp_template_path.display());
+            eprintln!("{}", err);
+            exit(1);
+        },
+    };
 
     let output = reprocess(output.as_str());
 
@@ -60,14 +64,17 @@ fn ensure_cargo_about_installed(rev: &str) -> PathBuf {
 
     if version.map(|v| v < "0.0.1").unwrap_or(true) {
         eprintln!("Installing cargo-about {}", rev);
-        cmd_run(format!("cargo install --git https://github.com/EmbarkStudios/cargo-about.git --rev {} --root {}", rev, root.display()).as_str()).expect("Failed to install cargo-about 0.0.1");
+        if let Err(err) = cmd_run(format!("cargo install --git https://github.com/EmbarkStudios/cargo-about.git --rev {} --root {}", rev, root.display()).as_str()) {
+            eprintln!("Failed to install cargo-about 0.0.1: {}", err);
+            exit(1);
+        }
     }
 
     expected_path
 }
 
 fn ensure_about_toml_exists() {
-    let path = PathBuf::from(get_env_os("CARGO_MANIFEST_DIR")).join("about.toml");
+    let path = get_env_path("CARGO_MANIFEST_DIR").join("about.toml");
     if !path.exists() {
         let mut about = File::create(path).expect("about.toml does not exist, and cannot be opened for writing");
         about.write_all(include_bytes!("../templates/about.toml")).expect("Created but failed to fully write out about.toml");
@@ -118,7 +125,7 @@ fn reprocess(text: &str) -> String {
 
 
 fn cmd(args: &str) -> Command {
-    let wd = get_env("CARGO_MANIFEST_DIR");
+    let wd = get_env_path("CARGO_MANIFEST_DIR");
     let mut args = args.split_whitespace();
     let exe = args.next().expect("cmd:  Expected a command");
     let mut cmd = Command::new(exe);
@@ -139,7 +146,21 @@ fn cmd_run(args: &str) -> io::Result<()> {
 fn cmd_output(args: &str) -> io::Result<String> {
     let output = cmd(args).output()?;
     if !output.status.success() {
-        Err(io::Error::new(io::ErrorKind::Other, format!("Failed to successfully run \"{}\": {:?}", args, output.status)))
+        let mut s = format!("Failed with {}: {}", output.status, args);
+        for (channel,   output          ) in [
+            ("stdout",  &output.stdout  ),
+            ("stderr",  &output.stderr  ),
+        ].iter().copied() {
+            if !output.is_empty() {
+                s.push_str("\n");
+                s.push_str(channel);
+                s.push_str(":\n");
+                s.push_str("-------");
+                s.push_str(&String::from_utf8_lossy(output));
+            }
+        }
+
+        Err(io::Error::new(io::ErrorKind::Other, s))
     } else {
         String::from_utf8(output.stdout).map_err(|err| io::Error::new(
             io::ErrorKind::InvalidData,
@@ -148,20 +169,21 @@ fn cmd_output(args: &str) -> io::Result<String> {
     }
 }
 
+fn get_env_path(name: &str) -> PathBuf {
+    PathBuf::from(get_env_os(name))
+}
+
 fn get_env_os(name: &str) -> OsString {
     match std::env::var_os(name) {
         Some(v) => v,
         None => {
-            panic!("{}: Not set", name);
-        },
-    }
-}
-
-fn get_env(name: &str) -> String {
-    match std::env::var(name) {
-        Ok(v) => v,
-        Err(err) => {
-            panic!("{}: {}", name, err);
+            if cfg!(windows) {
+                eprintln!("%{}%: Not set", name);
+                exit(1);
+            } else {
+                eprintln!("${{{}}}: Not set", name);
+                exit(1);
+            }
         },
     }
 }
