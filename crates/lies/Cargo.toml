@@ -1,0 +1,17 @@
+# https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package]
+name = "lies"
+version = "0.0.0-rc1"
+authors = ["MaulingMonkey <git@maulingmonkey.com>"]
+edition = "2018"
+description = "LIcense Embedding System"
+repository = "https://github.com/MaulingMonkey/lies"
+keywords = ["license", "embedding", "system", "legal", "compliance"]
+categories = ["gui"]
+license = "MIT OR Apache-2.0"
+include = ["/src/**/*", "/Cargo.toml", "/LICENSE-MIT", "/LICENSE-APACHE"]
+
+[dependencies]
+proc-macro-hack = "0.5"
+lies-impl       = { version = "0.0.0-rc1", path = "../lies-impl" }

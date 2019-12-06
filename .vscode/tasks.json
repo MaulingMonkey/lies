@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "presentation": {
+        "showReuseMessage": false,
+        "clear":            true,
+    },
+    "type": "shell",
+    "problemMatcher": "$rustc",
+    "options": {
+        "env": {
+            "RUST_BACKTRACE": "1",
+            "RUST_TOOLCHAIN": "stable-x86_64-msvc",
+        },
+        "cwd": "${workspaceFolder}",
+    },
+    "tasks": [
+        {
+            "label":    "scripts\\build.cmd",
+            "command":  "scripts\\build.cmd",
+            "group": { "kind": "build", "isDefault": true }
+        },
+        {
+            "label":    "cargo build",
+            "command":  "cargo build",
+        },
+        {
+            "label":    "cargo build --release",
+            "command":  "cargo build --release",
+        },
+        {
+            "label":    "cargo doc --no-deps",
+            "command":  "cargo doc --no-deps",
+        },
+        {
+            "label": "Open local docs",
+            "windows": { "command": "start \"\" target/doc/lies/index.html" }
+        },
+    ]
+}
