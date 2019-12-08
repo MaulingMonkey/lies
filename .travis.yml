@@ -1,0 +1,24 @@
+language: rust
+
+branches:
+  except:
+    - /^v\d+\.\d+\.\d+$/  # Exclude tags in the style of v1.2.3
+    - /^dead\/.+$/        # Exclude dead/* branches from CI, they're dead for a reason
+
+matrix:
+  allow_failures:
+    - rust: nightly
+  include:
+    - { name: "Linux Debug 1.39.0",   os: linux,    rust: 1.39.0  }
+    - { name: "Linux Debug Stable",   os: linux,    rust: stable  }
+    - { name: "Linux Debug Beta",     os: linux,    rust: beta    }
+    - { name: "Linux Debug Nightly",  os: linux,    rust: nightly }
+
+script:
+  - cargo build --all-targets
+  - cargo test
+  - cargo doc --no-deps
+  - target/debug/example-console version
+  - target/debug/example-console help
+  - target/debug/example-console about
+  - target/debug/example-console add 1 2 3
