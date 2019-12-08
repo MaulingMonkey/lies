@@ -1,7 +1,5 @@
 //! [lies](https://docs.rs/lies/) implementation details.
 
-const CARGO_ABOUT_REV : &'static str = "6b2a876910a98cfc48f68468b101bc2dfaed6cca";
-
 extern crate proc_macro;
 
 use proc_macro_hack::*;
@@ -24,7 +22,7 @@ pub fn licenses_ansi(_input: TokenStream) -> TokenStream {
 }
 
 fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
-    let cargo_about = ensure_cargo_about_installed(CARGO_ABOUT_REV);
+    let cargo_about = ensure_cargo_about_installed();
     ensure_about_toml_exists();
 
     let tmp_template_path = std::env::temp_dir().join(format!("{}-{}-{}",
@@ -52,9 +50,8 @@ fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
     TokenStream::from(TokenTree::Literal(Literal::string(output.as_str())))
 }
 
-fn ensure_cargo_about_installed(rev: &str) -> PathBuf {
-    let root            = [std::env::temp_dir().as_path(), Path::new(rev)].iter().collect::<PathBuf>();
-    let expected_path   = [root.as_path(), Path::new("bin"), Path::new("cargo-about")].iter().collect::<PathBuf>();
+fn ensure_cargo_about_installed() -> PathBuf {
+    let expected_path = PathBuf::from("cargo-about");
     let version = cmd_output(format!("{} about --version", expected_path.display()).as_str()).ok();
     let version = version.as_ref().and_then(|output|{
         let ws = output.find(' ')?;
@@ -62,9 +59,15 @@ fn ensure_cargo_about_installed(rev: &str) -> PathBuf {
         Some(version.trim()) // leading ' ', trailing '\n'
     });
 
-    if version.map(|v| v < "0.0.1").unwrap_or(true) {
-        eprintln!("Installing cargo-about {}", rev);
-        if let Err(err) = cmd_run(format!("cargo install --git https://github.com/EmbarkStudios/cargo-about.git --rev {} --root {}", rev, root.display()).as_str()) {
+    let install = match version {
+        None                                => { eprintln!("Installing cargo-about"); true },
+        Some("0.0.1")                       => { eprintln!("Upgrading cargo-about"); true },
+        Some(v) if v.starts_with("0.1.")    => false, // Expected version
+        Some(v)                             => { eprintln!("cargo-about {} may have breaking changes vs expected version 0.1.x", v); false }, // Newer (0.2.x?) but leave alone
+    };
+
+    if install {
+        if let Err(err) = cmd_run(format!("cargo install cargo-about --vers ^0.1 --force").as_str()) {
             eprintln!("Failed to install cargo-about 0.0.1: {}", err);
             exit(1);
         }
