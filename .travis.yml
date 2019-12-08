@@ -15,6 +15,7 @@ matrix:
     - { name: "Linux Debug Nightly",  os: linux,    rust: nightly }
 
 script:
+  - export PATH=${TRAVIS_HOME}/.cargo/bin:$PATH
   - cargo build --all-targets
   - cargo test
   - cargo doc --no-deps
@@ -22,3 +23,8 @@ script:
   - target/debug/example-console help
   - target/debug/example-console about
   - target/debug/example-console add 1 2 3
+
+# https://levans.fr/rust_travis_cache.html
+cache:
+  directories:
+    - $TRAVIS_HOME/.cargo/bin/
