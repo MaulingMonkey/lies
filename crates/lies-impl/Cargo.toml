@@ -2,7 +2,7 @@
 
 [package]
 name = "lies-impl"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["MaulingMonkey <git@maulingmonkey.com>"]
 edition = "2018"
 description = "LIcense Embedding System (Implementation Details)"
