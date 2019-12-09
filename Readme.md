@@ -14,7 +14,7 @@ inside your console program, as a means of complying with licensing requirements
 | ------ | ------ | ----- |
 | [publish](https://github.com/MaulingMonkey/lies/tree/publish) | [![Crates.io](https://img.shields.io/crates/v/lies.svg)](https://crates.io/crates/lies) [![Docs](https://docs.rs/lies/badge.svg)](https://docs.rs/lies/) | Stable/published version
 | [master](https://github.com/MaulingMonkey/lies/tree/master)   | [![Build Status](https://travis-ci.org/MaulingMonkey/lies.svg)](https://travis-ci.org/MaulingMonkey/lies) [![Open issues](https://img.shields.io/github/issues-raw/MaulingMonkey/lies.svg)](https://github.com/MaulingMonkey/lies/issues) | "Completed" stuff that hasn't been published.
-| wip/*                                                         | | "Work In Progress" - incomplete stuff that might be rebased, use at your own risk.
+| wip/*                                                         | | "Work In Progress" - incomplete, use at your own risk.
 | dead/*                                                        | | Abandoned threads of work
 
 # Examples
