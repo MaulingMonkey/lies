@@ -5,7 +5,7 @@
 //! 
 //! # Examples
 //! 
-//! ```
+//! ```no_compile
 //! println!("{}", lies::licenses_text!()); // Monochrome
 //! println!("{}", lies::licenses_ansi!()); // https://en.wikipedia.org/wiki/ANSI_escape_code
 //! ```
@@ -18,7 +18,7 @@ use proc_macro_hack::proc_macro_hack;
 /// 
 /// # Example
 /// 
-/// ```rust
+/// ```no_compile
 /// println!("{}", lies::licenses_text!());
 /// ```
 #[proc_macro_hack]
@@ -28,7 +28,7 @@ pub use lies_impl::licenses_text;
 /// 
 /// # Example
 /// 
-/// ```rust
+/// ```no_compile
 /// println!("{}", lies::licenses_ansi!());
 /// ```
 /// 

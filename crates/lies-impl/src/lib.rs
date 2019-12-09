@@ -77,7 +77,7 @@ fn ensure_cargo_about_installed() -> PathBuf {
 }
 
 fn ensure_about_toml_exists() {
-    let path = get_env_path("CARGO_MANIFEST_DIR").join("about.toml");
+    let path = Path::new("about.toml");
     if !path.exists() {
         let mut about = File::create(path).expect("about.toml does not exist, and cannot be opened for writing");
         about.write_all(include_bytes!("../templates/about.toml")).expect("Created but failed to fully write out about.toml");
@@ -128,11 +128,9 @@ fn reprocess(text: &str) -> String {
 
 
 fn cmd(args: &str) -> Command {
-    let wd = get_env_path("CARGO_MANIFEST_DIR");
     let mut args = args.split_whitespace();
     let exe = args.next().expect("cmd:  Expected a command");
     let mut cmd = Command::new(exe);
-    cmd.current_dir(wd);
     for arg in args { cmd.arg(arg); }
     cmd
 }
