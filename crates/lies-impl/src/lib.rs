@@ -4,10 +4,12 @@ extern crate proc_macro;
 
 use proc_macro_hack::*;
 use proc_macro::*;
+use quote::quote;
 
 use std::ffi::*;
 use std::fs::*;
 use std::io::{self, Write};
+use std::iter::*;
 use std::path::*;
 use std::process::*;
 
@@ -23,7 +25,7 @@ pub fn licenses_ansi(_input: TokenStream) -> TokenStream {
 
 fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
     let cargo_about = ensure_cargo_about_installed();
-    ensure_about_toml_exists();
+    let about_toml = ensure_about_toml_exists();
 
     let tmp_template_path = std::env::temp_dir().join(format!("{}-{}-{}",
         get_env_path("CARGO_PKG_NAME"   ).display(),
@@ -47,8 +49,16 @@ fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
 
     let output = reprocess(output.as_str());
 
-    TokenStream::from(TokenTree::Literal(Literal::string(output.as_str())))
+    let output = output.as_str();
+    let about_toml = about_toml.to_str().expect("Path to about.toml contains invalid unicode");
+    TokenStream::from(quote!{
+        {
+            const _ : &[u8] = include_bytes!(#about_toml); // Ensure license strings are rebuilt when modified [1]
+            #output
+        }
+    })
 }
+// [1] https://internals.rust-lang.org/t/pre-rfc-add-a-builtin-macro-to-indicate-build-dependency-to-file/9242/2
 
 fn ensure_cargo_about_installed() -> PathBuf {
     let expected_path = PathBuf::from("cargo-about");
@@ -76,12 +86,13 @@ fn ensure_cargo_about_installed() -> PathBuf {
     expected_path
 }
 
-fn ensure_about_toml_exists() {
-    let path = Path::new("about.toml");
+fn ensure_about_toml_exists() -> PathBuf {
+    let path = Path::new("about.toml").canonicalize().expect("Cannot canonicalize about.toml path");
     if !path.exists() {
-        let mut about = File::create(path).expect("about.toml does not exist, and cannot be opened for writing");
+        let mut about = File::create(&path).expect("about.toml does not exist, and cannot be opened for writing");
         about.write_all(include_bytes!("../templates/about.toml")).expect("Created but failed to fully write out about.toml");
     }
+    path
 }
 
 fn reprocess(text: &str) -> String {
