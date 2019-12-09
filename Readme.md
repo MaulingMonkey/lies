@@ -3,17 +3,19 @@
 **LIES** - **LI**cense **E**mbedding **S**ystem
 
 [![GitHub](https://img.shields.io/github/stars/MaulingMonkey/lies.svg?label=GitHub&style=social)](https://github.com/MaulingMonkey/lies)
-[![Build Status](https://travis-ci.org/MaulingMonkey/lies.svg)](https://travis-ci.org/MaulingMonkey/lies)
-[![Crates.io](https://img.shields.io/crates/v/lies.svg)](https://crates.io/crates/lies)
 ![unsafe: no](https://img.shields.io/badge/unsafe-no-green.svg)
 ![rust: 1.39.0+](https://img.shields.io/badge/rust-1.39.0%2B-green.svg)
-[![Open issues](https://img.shields.io/github/issues-raw/MaulingMonkey/lies.svg)](https://github.com/MaulingMonkey/lies/issues)
 [![License](https://img.shields.io/crates/l/lies.svg)](https://github.com/MaulingMonkey/lies)
-[![Docs](https://docs.rs/lies/badge.svg)](https://docs.rs/lies/)
-<!--[![dependency status](https://deps.rs/repo/github/MaulingMonkey/lies/status.svg)](https://deps.rs/repo/github/MaulingMonkey/lies)-->
 
 Wraps and reformats the results of [cargo-about] to embed license text and information
 inside your console program, as a means of complying with licensing requirements.
+
+| Branch | Badges | Notes |
+| ------ | ------ | ----- |
+| [publish](https://github.com/MaulingMonkey/lies/tree/publish) | [![Crates.io](https://img.shields.io/crates/v/lies.svg)](https://crates.io/crates/lies) [![Docs](https://docs.rs/lies/badge.svg)](https://docs.rs/lies/) | Stable/published version
+| [master](https://github.com/MaulingMonkey/lies/tree/master)   | [![Build Status](https://travis-ci.org/MaulingMonkey/lies.svg)](https://travis-ci.org/MaulingMonkey/lies) [![Open issues](https://img.shields.io/github/issues-raw/MaulingMonkey/lies.svg)](https://github.com/MaulingMonkey/lies/issues) [![dependency status](https://deps.rs/repo/github/MaulingMonkey/lies/status.svg)](https://deps.rs/repo/github/MaulingMonkey/lies) | "Completed" stuff that hasn't been published.
+| wip/*                                                         | | "Work In Progress" - incomplete stuff that might be rebased, use at your own risk.
+| dead/*                                                        | | Abandoned threads of work
 
 # Examples
 
