@@ -4,12 +4,18 @@ extern crate proc_macro;
 
 use proc_macro_hack::*;
 use proc_macro::*;
+use quote::quote;
 
 use std::ffi::*;
 use std::fs::*;
 use std::io::{self, Write};
 use std::path::*;
 use std::process::*;
+
+mod features {
+    pub const ABOUT_PER_CRATE       : bool = cfg!(feature = "about-per-crate");
+    pub const ABOUT_PER_WORKSPACE   : bool = cfg!(feature = "about-per-workspace");
+}
 
 #[proc_macro_hack]
 pub fn licenses_text(_input: TokenStream) -> TokenStream {
@@ -23,7 +29,7 @@ pub fn licenses_ansi(_input: TokenStream) -> TokenStream {
 
 fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
     let cargo_about = ensure_cargo_about_installed();
-    ensure_about_toml_exists();
+    let about_toml  = ensure_about_toml_exists();
 
     let tmp_template_path = std::env::temp_dir().join(format!("{}-{}-{}",
         get_env_path("CARGO_PKG_NAME"   ).display(),
@@ -46,9 +52,25 @@ fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
     };
 
     let output = reprocess(output.as_str());
+    let about_toml = about_toml.to_str().expect("Path to about.toml contains invalid unicode");
 
-    TokenStream::from(TokenTree::Literal(Literal::string(output.as_str())))
+    if !features::ABOUT_PER_CRATE && !features::ABOUT_PER_WORKSPACE {
+        return TokenStream::from(quote!{
+            {
+                compile_error!("Enable either the \"about-per-crate\" or the \"about-per-workspace\" feature for lies");
+                #output
+            }
+        });
+    }
+
+    TokenStream::from(quote!{
+        {
+            const _ : &'static [u8] = include_bytes!(#about_toml); // Ensure license strings are rebuilt when modified [1]
+            #output
+        }
+    })
 }
+// [1] https://internals.rust-lang.org/t/pre-rfc-add-a-builtin-macro-to-indicate-build-dependency-to-file/9242/2
 
 fn ensure_cargo_about_installed() -> PathBuf {
     let expected_path = PathBuf::from("cargo-about");
@@ -76,12 +98,13 @@ fn ensure_cargo_about_installed() -> PathBuf {
     expected_path
 }
 
-fn ensure_about_toml_exists() {
-    let path = get_env_path("CARGO_MANIFEST_DIR").join("about.toml");
+fn ensure_about_toml_exists() -> PathBuf {
+    let path = get_about_dir().join("about.toml");
     if !path.exists() {
-        let mut about = File::create(path).expect("about.toml does not exist, and cannot be opened for writing");
+        let mut about = File::create(&path).expect("about.toml does not exist, and cannot be opened for writing");
         about.write_all(include_bytes!("../templates/about.toml")).expect("Created but failed to fully write out about.toml");
     }
+    path
 }
 
 fn reprocess(text: &str) -> String {
@@ -125,10 +148,21 @@ fn reprocess(text: &str) -> String {
     lines.join("\n")
 }
 
+fn get_about_dir() -> PathBuf {
+    if features::ABOUT_PER_WORKSPACE {
+        get_workspace_dir()
+    } else if features::ABOUT_PER_CRATE {
+        get_crate_dir()
+    } else {
+        get_crate_dir() // XXX: May change in the future depending on what cargo-about does
+    }
+}
+
+
 
 
 fn cmd(args: &str) -> Command {
-    let wd = get_env_path("CARGO_MANIFEST_DIR");
+    let wd = get_about_dir();
     let mut args = args.split_whitespace();
     let exe = args.next().expect("cmd:  Expected a command");
     let mut cmd = Command::new(exe);
@@ -189,4 +223,17 @@ fn get_env_os(name: &str) -> OsString {
             }
         },
     }
+}
+
+fn get_crate_dir() -> PathBuf {
+    get_env_path("CARGO_MANIFEST_DIR")
+}
+
+fn get_workspace_dir() -> PathBuf {
+    // We could just search for Cargo.lock but that's not guaranteed to find the
+    // actual workspace - I might pay slavish attention to extra leftover files
+    // and delete any Cargo.lock files leftover from before a conversion to
+    // use workspaces, but not everyone is as OCD as I am.  As such, resort to
+    // a full cargo metadata parse.
+    cargo_metadata::MetadataCommand::new().exec().unwrap().workspace_root
 }

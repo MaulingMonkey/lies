@@ -8,4 +8,4 @@ authors = ["MaulingMonkey <git@maulingmonkey.com>"]
 edition = "2018"
 
 [dependencies]
-lies = { path = "../lies", version = "=0.0.1" }
+lies = { path = "../lies", version = "=0.0.1", features=["about-per-workspace"] }

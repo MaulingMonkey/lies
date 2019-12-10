@@ -15,3 +15,7 @@ include = ["/src/**/*", "/Cargo.toml", "/LICENSE-MIT", "/LICENSE-APACHE"]
 [dependencies]
 proc-macro-hack = "0.5"
 lies-impl       = { version = "0.0.1", path = "../lies-impl" }
+
+[features]
+about-per-crate     = ["lies-impl/about-per-crate"]
+about-per-workspace = ["lies-impl/about-per-workspace"]
