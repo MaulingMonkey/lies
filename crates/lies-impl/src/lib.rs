@@ -12,6 +12,12 @@ use std::io::{self, Write};
 use std::path::*;
 use std::process::*;
 
+macro_rules! fatal {
+    (user,      $($tt:tt)+) => {{ eprintln!($($tt)+); exit(1); }};
+    (system,    $($tt:tt)+) => {{ eprintln!($($tt)+); exit(1); }};
+    (bug,       $($tt:tt)+) => {{ eprintln!($($tt)+); eprintln!("This is a bug!  Please file an issue against https://github.com/MaulingMonkey/lies/issues if one doesn't already exist"); exit(1); }};
+}
+
 mod features {
     pub const ABOUT_PER_CRATE       : bool = cfg!(feature = "about-per-crate");
     pub const ABOUT_PER_WORKSPACE   : bool = cfg!(feature = "about-per-workspace");
@@ -38,30 +44,16 @@ fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
     ));
 
     File::create(&tmp_template_path)
-        .expect("Unable to create temporary .hbs file")
+        .unwrap_or_else(|err| fatal!(system, "Unable to create temporary .hbs file: {}", err))
         .write_all(input_text)
-        .expect("Unable to write entire temporary .hbs file");
+        .unwrap_or_else(|err| fatal!(system, "Unable to write entire temporary .hbs file: {}", err));
 
-    let output = match cmd_output(format!("{} about generate {}", cargo_about.display(), tmp_template_path.display()).as_str()) {
-        Ok(o) => o,
-        Err(err) => {
-            eprintln!("Failed to '{} about generate {}'", cargo_about.display(), tmp_template_path.display());
-            eprintln!("{}", err);
-            exit(1);
-        },
-    };
+    let output = cmd_output(format!("{} about generate {}", cargo_about.display(), tmp_template_path.display()).as_str()).unwrap_or_else(|err|
+        fatal!(system, "Failed to '{} about generate {}'\n{}", cargo_about.display(), tmp_template_path.display(), err)
+    );
 
     let output = reprocess(output.as_str());
-    let about_toml = about_toml.to_str().expect("Path to about.toml contains invalid unicode");
-
-    if !features::ABOUT_PER_CRATE && !features::ABOUT_PER_WORKSPACE {
-        return TokenStream::from(quote!{
-            {
-                compile_error!("Enable either the \"about-per-crate\" or the \"about-per-workspace\" feature for lies");
-                #output
-            }
-        });
-    }
+    let about_toml = about_toml.to_str().unwrap_or_else(|| fatal!(system, "Path to about.toml contains invalid unicode: {}", about_toml.display()));
 
     TokenStream::from(quote!{
         {
@@ -89,10 +81,9 @@ fn ensure_cargo_about_installed() -> PathBuf {
     };
 
     if install {
-        if let Err(err) = cmd_run(format!("cargo install cargo-about --vers ^0.1 --force").as_str()) {
-            eprintln!("Failed to install cargo-about 0.0.1: {}", err);
-            exit(1);
-        }
+        cmd_run(format!("cargo install cargo-about --vers ^0.1 --force").as_str()).unwrap_or_else(|err|
+            fatal!(system, "Failed to install cargo-about 0.0.1: {}", err)
+        );
     }
 
     expected_path
@@ -101,8 +92,8 @@ fn ensure_cargo_about_installed() -> PathBuf {
 fn ensure_about_toml_exists() -> PathBuf {
     let path = get_about_dir().join("about.toml");
     if !path.exists() {
-        let mut about = File::create(&path).expect("about.toml does not exist, and cannot be opened for writing");
-        about.write_all(include_bytes!("../templates/about.toml")).expect("Created but failed to fully write out about.toml");
+        let mut about = File::create(&path).unwrap_or_else(|err| fatal!(system, "about.toml does not exist, and cannot be opened for writing: {}", err));
+        about.write_all(include_bytes!("../templates/about.toml")).unwrap_or_else(|err| fatal!(system, "Created but failed to fully write out about.toml: {}", err));
     }
     path
 }
@@ -134,7 +125,7 @@ fn reprocess(text: &str) -> String {
             // Fixup this "table"
             for line in start_line..end_line {
                 let line = &mut lines[line];
-                let tab = line.find('\t').unwrap(); // Already found it once
+                let tab = line.find('\t').unwrap_or_else(|| fatal!(bug, "Markdown table line missing tabs after previous enumeration found tabs"));
                 let mut fixed = line[..tab].to_string();
                 for _ in fixed.chars().count()..max_col {
                     fixed.push(' ');
@@ -149,22 +140,27 @@ fn reprocess(text: &str) -> String {
 }
 
 fn get_about_dir() -> PathBuf {
-    if features::ABOUT_PER_WORKSPACE {
-        get_workspace_dir()
-    } else if features::ABOUT_PER_CRATE {
-        get_crate_dir()
-    } else {
-        get_crate_dir() // XXX: May change in the future depending on what cargo-about does
+    match (features::ABOUT_PER_WORKSPACE, features::ABOUT_PER_CRATE) {
+        (true,  false) => get_workspace_dir(),
+        (false, true ) => get_crate_dir(),
+        (true,  true ) => fatal!(user, "The \"about-per-crate\" and \"about-per-workspace\" features were enabled"),
+        (false, false) => {
+            let (workspace_dir, crate_dir) = (get_workspace_dir(), get_crate_dir());
+            if workspace_dir != crate_dir {
+                fatal!(user, "The workspace path doesn't match the crate path, so you must specify the \"about-per-crate\" or \"about-per-workspace\" feature.");
+            }
+            workspace_dir
+        },
     }
 }
 
 
 
 
-fn cmd(args: &str) -> Command {
+fn cmd(args_str: &str) -> Command {
     let wd = get_about_dir();
-    let mut args = args.split_whitespace();
-    let exe = args.next().expect("cmd:  Expected a command");
+    let mut args = args_str.split_whitespace();
+    let exe = args.next().unwrap_or_else(|| fatal!(bug, "cmd expected an exe: {:?}", args_str));
     let mut cmd = Command::new(exe);
     cmd.current_dir(wd);
     for arg in args { cmd.arg(arg); }
@@ -211,18 +207,13 @@ fn get_env_path(name: &str) -> PathBuf {
 }
 
 fn get_env_os(name: &str) -> OsString {
-    match std::env::var_os(name) {
-        Some(v) => v,
-        None => {
-            if cfg!(windows) {
-                eprintln!("%{}%: Not set", name);
-                exit(1);
-            } else {
-                eprintln!("${{{}}}: Not set", name);
-                exit(1);
-            }
-        },
-    }
+    std::env::var_os(name).unwrap_or_else(||{
+        if cfg!(windows) {
+            fatal!(system, "%{}%: Not set", name);
+        } else {
+            fatal!(system, "${{{}}}: Not set", name);
+        }
+    })
 }
 
 fn get_crate_dir() -> PathBuf {
@@ -235,5 +226,7 @@ fn get_workspace_dir() -> PathBuf {
     // and delete any Cargo.lock files leftover from before a conversion to
     // use workspaces, but not everyone is as OCD as I am.  As such, resort to
     // a full cargo metadata parse.
-    cargo_metadata::MetadataCommand::new().exec().unwrap().workspace_root
+    cargo_metadata::MetadataCommand::new().exec().unwrap_or_else(|err|
+        fatal!(system, "Failed to exec cargo metadata: {}", err)
+    ).workspace_root
 }
