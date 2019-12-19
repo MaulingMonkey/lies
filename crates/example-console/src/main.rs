@@ -36,7 +36,11 @@ fn print_usage() {
 
 fn print_about() {
     print_version();
+    println!("Licenses and libraries used in this project:");
+    println!();
     println!("{}", lies::licenses_ansi!());
+    println!();
+    println!();
 }
 
 fn add(args: env::Args) {

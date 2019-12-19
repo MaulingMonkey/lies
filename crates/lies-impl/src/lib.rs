@@ -146,11 +146,29 @@ fn ensure_about_out_txt_exists(input_text: &[u8], input_name: &str, cargo_lock: 
 }
 
 fn reprocess(text: &str) -> String {
+    let mut blank_in_a_row = 0;
     let mut lines = text.lines().map(|line| line
+        .trim_end_matches(|ch| " \t\r\n".find(ch).is_some()) // Only trim basic ASCII whitespace, not NBSP
         .replace("&quot;", "\"")
         .replace("&amp;", "&")
         .replace("&copy;", "(c)")
-    ).collect::<Vec<String>>();
+    ).filter(|line|{
+        if line == "" {
+            blank_in_a_row += 1;
+        } else {
+            blank_in_a_row = 0;
+        }
+        blank_in_a_row < 2
+    }).collect::<Vec<String>>();
+
+    while let Some(line) = lines.last() {
+        if line == "" {
+            lines.pop();
+        } else {
+            break;
+        }
+    }
+
     let lines_n = lines.len();
 
     for start_line in 0..lines_n {

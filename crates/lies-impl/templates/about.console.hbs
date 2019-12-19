@@ -1,7 +1,3 @@
-                  Third Party Software
-                  ====================
-This lists the libraries used in this project and their licenses.
-
   License	  Crates
 {{#each overview}}{{name}}	({{count}} crates)
 {{/each}}
@@ -10,11 +6,10 @@ This lists the libraries used in this project and their licenses.
 {{#each licenses}}{{#each used_by}}{{crate.name}}	v{{crate.version}}	{{../name}} ({{@../index}})	{{crate.repository}}
 {{/each}}{{/each}}
 
+{{#each licenses}} 
 
-{{#each licenses}}{{name}} [{{@index}}]    Used by: {{#each used_by}}{{#if @index}}, {{/if}}{{crate.name}} v{{crate.version}}{{/each}}
+{{name}} [{{@index}}]    Used by: {{#each used_by}}{{#if @index}}, {{/if}}{{crate.name}} v{{crate.version}}{{/each}}
 
 {{text}}
-
-
 
 {{/each}}
