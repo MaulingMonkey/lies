@@ -7,7 +7,7 @@ use proc_macro::*;
 use quote::quote;
 
 use std::ffi::*;
-use std::fs::*;
+use std::fs::{self, *};
 use std::io::{self, Write};
 use std::path::*;
 use std::process::*;
@@ -23,42 +23,40 @@ mod features {
     pub const ABOUT_PER_WORKSPACE   : bool = cfg!(feature = "about-per-workspace");
 }
 
+lazy_static::lazy_static! {
+    // NOTE:  I intentionally avoid listing most file paths here, to force you to use ensure_* methods to e.g. create them first.
+    static ref CARGO_METADATA       : cargo_metadata::Metadata  = cargo_metadata::MetadataCommand::new().exec().unwrap_or_else(|err| fatal!(system, "Failed to exec cargo metadata: {}", err));
+    static ref WORKSPACE_DIR        : PathBuf                   = CARGO_METADATA.workspace_root.clone();
+    static ref CARGO_MANIFEST_DIR   : PathBuf                   = get_env_path("CARGO_MANIFEST_DIR");
+    static ref ABOUT_TOML_DIR       : PathBuf                   = get_about_toml_dir();
+}
+
 #[proc_macro_hack]
 pub fn licenses_text(_input: TokenStream) -> TokenStream {
-    use_cargo_about(include_bytes!("../templates/about.console.hbs"), "about.console.hbs")
+    emit_quote_cargo_about(include_bytes!("../templates/about.console.hbs"), "about.console.hbs")
 }
 
 #[proc_macro_hack]
 pub fn licenses_ansi(_input: TokenStream) -> TokenStream {
-    use_cargo_about(include_bytes!("../templates/about.ansi.hbs"), "about.ansi.hbs")
+    emit_quote_cargo_about(include_bytes!("../templates/about.ansi.hbs"), "about.ansi.hbs")
 }
 
-fn use_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
-    let cargo_about = ensure_cargo_about_installed();
-    let about_toml  = ensure_about_toml_exists();
+fn emit_quote_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
+    let cargo_lock      = WORKSPACE_DIR.join("Cargo.lock");
+    let about_toml      = ensure_about_toml_exists();
+    let about_out_txt   = ensure_about_out_txt_exists(input_text, input_name, &cargo_lock, &about_toml);
 
-    let tmp_template_path = std::env::temp_dir().join(format!("{}-{}-{}",
-        get_env_path("CARGO_PKG_NAME"   ).display(),
-        get_env_path("CARGO_PKG_VERSION").display(),
-        input_name
-    ));
-
-    File::create(&tmp_template_path)
-        .unwrap_or_else(|err| fatal!(system, "Unable to create temporary .hbs file: {}", err))
-        .write_all(input_text)
-        .unwrap_or_else(|err| fatal!(system, "Unable to write entire temporary .hbs file: {}", err));
-
-    let output = cmd_output(format!("{} about generate {}", cargo_about.display(), tmp_template_path.display()).as_str()).unwrap_or_else(|err|
-        fatal!(system, "Failed to '{} about generate {}'\n{}", cargo_about.display(), tmp_template_path.display(), err)
-    );
-
-    let output = reprocess(output.as_str());
-    let about_toml = about_toml.to_str().unwrap_or_else(|| fatal!(system, "Path to about.toml contains invalid unicode: {}", about_toml.display()));
+    let cargo_lock      = cargo_lock    .to_str().unwrap_or_else(|| fatal!(system, "Path to Cargo.lock contains invalid unicode: {}", cargo_lock.display()));
+    let about_toml      = about_toml    .to_str().unwrap_or_else(|| fatal!(system, "Path to about.toml contains invalid unicode: {}", about_toml.display()));
+    let about_out_txt   = about_out_txt .to_str().unwrap_or_else(|| fatal!(system, "Path to about.out.txt contains invalid unicode: {}", about_out_txt.display()));
 
     TokenStream::from(quote!{
         {
-            const _ : &'static [u8] = include_bytes!(#about_toml); // Ensure license strings are rebuilt when modified [1]
-            #output
+            // Ensure license strings are rebuilt when modified [1]
+            const _ : &'static [u8] = include_bytes!(#about_toml);
+            const _ : &'static [u8] = include_bytes!(#cargo_lock);
+
+            include_str!(#about_out_txt)
         }
     })
 }
@@ -90,12 +88,61 @@ fn ensure_cargo_about_installed() -> PathBuf {
 }
 
 fn ensure_about_toml_exists() -> PathBuf {
-    let path = get_about_dir().join("about.toml");
+    let path = ABOUT_TOML_DIR.join("about.toml");
     if !path.exists() {
         let mut about = File::create(&path).unwrap_or_else(|err| fatal!(system, "about.toml does not exist, and cannot be opened for writing: {}", err));
         about.write_all(include_bytes!("../templates/about.toml")).unwrap_or_else(|err| fatal!(system, "Created but failed to fully write out about.toml: {}", err));
     }
     path
+}
+
+fn ensure_about_out_txt_exists(input_text: &[u8], input_name: &str, cargo_lock: &PathBuf, about_toml: &PathBuf) -> PathBuf {
+    let cargo_about = ensure_cargo_about_installed();
+
+    let target_lies = CARGO_METADATA.target_directory.join("lies");
+    if !target_lies.exists() {
+        create_dir_all(&target_lies).unwrap_or_else(|err| fatal!(system, "Failed to create target/lies directory: {}", err));
+    }
+
+    let about_out_txt = if !features::ABOUT_PER_WORKSPACE {
+        format!("{}-{}-{}.out.txt", get_env_path("CARGO_PKG_NAME").display(), get_env_path("CARGO_PKG_VERSION").display(), input_name)
+    } else {
+        format!("{}.out.txt", input_name)
+    };
+    let about_out_txt = target_lies.join(about_out_txt);
+    if let Ok(about_out_txt_mod) = about_out_txt.metadata().and_then(|md| md.modified()) {
+        let mut up_to_date = true;
+        for dependency in [cargo_lock, about_toml].iter() {
+            let dep_mod = dependency
+                .metadata().unwrap_or_else(|err| fatal!(system, "Cannot read {} metadata: {}", dependency.display(), err))
+                .modified().unwrap_or_else(|err| fatal!(system, "Cannot read {} last modified time: {}", dependency.display(), err));
+            if dep_mod >= about_out_txt_mod { // Dependency was modified more recently than result
+                up_to_date = false;
+            }
+        }
+        if up_to_date {
+            return about_out_txt;
+        }
+    }
+
+    let tmp_template_path = std::env::temp_dir().join(format!("{}-{}-{}",
+        get_env_path("CARGO_PKG_NAME"   ).display(),
+        get_env_path("CARGO_PKG_VERSION").display(),
+        input_name
+    ));
+
+    File::create(&tmp_template_path)
+        .unwrap_or_else(|err| fatal!(system, "Unable to create output .hbs file: {}", err))
+        .write_all(input_text)
+        .unwrap_or_else(|err| fatal!(system, "Unable to write entire output .hbs file: {}", err));
+
+    let output = cmd_output(format!("{} about generate {}", cargo_about.display(), tmp_template_path.display()).as_str()).unwrap_or_else(|err|
+        fatal!(system, "Failed to '{} about generate {}'\n{}", cargo_about.display(), tmp_template_path.display(), err)
+    );
+
+    let output = reprocess(output.as_str());
+    fs::write(&about_out_txt, output).unwrap_or_else(|err| fatal!(system, "Failed to write {}: {}", about_out_txt.display(), err));
+    about_out_txt
 }
 
 fn reprocess(text: &str) -> String {
@@ -139,17 +186,17 @@ fn reprocess(text: &str) -> String {
     lines.join("\n")
 }
 
-fn get_about_dir() -> PathBuf {
+fn get_about_toml_dir() -> PathBuf {
+    let (workspace_dir, crate_dir) = (&*WORKSPACE_DIR, &*CARGO_MANIFEST_DIR);
     match (features::ABOUT_PER_WORKSPACE, features::ABOUT_PER_CRATE) {
-        (true,  false) => get_workspace_dir(),
-        (false, true ) => get_crate_dir(),
+        (true,  false) => workspace_dir.clone(),
+        (false, true ) => crate_dir.clone(),
         (true,  true ) => fatal!(user, "The \"about-per-crate\" and \"about-per-workspace\" features were enabled"),
         (false, false) => {
-            let (workspace_dir, crate_dir) = (get_workspace_dir(), get_crate_dir());
             if workspace_dir != crate_dir {
                 fatal!(user, "The workspace path doesn't match the crate path, so you must specify the \"about-per-crate\" or \"about-per-workspace\" feature.");
             }
-            workspace_dir
+            workspace_dir.clone()
         },
     }
 }
@@ -158,7 +205,7 @@ fn get_about_dir() -> PathBuf {
 
 
 fn cmd(args_str: &str) -> Command {
-    let wd = get_about_dir();
+    let wd = get_about_toml_dir();
     let mut args = args_str.split_whitespace();
     let exe = args.next().unwrap_or_else(|| fatal!(bug, "cmd expected an exe: {:?}", args_str));
     let mut cmd = Command::new(exe);
@@ -214,19 +261,4 @@ fn get_env_os(name: &str) -> OsString {
             fatal!(system, "${{{}}}: Not set", name);
         }
     })
-}
-
-fn get_crate_dir() -> PathBuf {
-    get_env_path("CARGO_MANIFEST_DIR")
-}
-
-fn get_workspace_dir() -> PathBuf {
-    // We could just search for Cargo.lock but that's not guaranteed to find the
-    // actual workspace - I might pay slavish attention to extra leftover files
-    // and delete any Cargo.lock files leftover from before a conversion to
-    // use workspaces, but not everyone is as OCD as I am.  As such, resort to
-    // a full cargo metadata parse.
-    cargo_metadata::MetadataCommand::new().exec().unwrap_or_else(|err|
-        fatal!(system, "Failed to exec cargo metadata: {}", err)
-    ).workspace_root
 }
