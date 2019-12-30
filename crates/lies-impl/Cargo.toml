@@ -16,7 +16,7 @@ proc-macro = true
 [dependencies]
 proc-macro-hack = "0.5"
 quote           = "1.0" # already depended upon by proc-macr-hack 0.5.11
-cargo_metadata  = "0.8"
+cargo_metadata  = "0.9"
 lazy_static     = "1.4"
 
 [features]
