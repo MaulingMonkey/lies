@@ -89,7 +89,7 @@ fn ensure_cargo_about_installed() -> PathBuf {
     };
 
     if install {
-        cmd_run(format!("cargo install cargo-about --vers ^0.1 --force").as_str()).unwrap_or_else(|err|
+        cmd_run(format!("cargo +stable install cargo-about --vers ^0.1 --force").as_str()).unwrap_or_else(|err|
             fatal!(system, "Failed to install cargo-about 0.0.1: {}", err)
         );
     }
