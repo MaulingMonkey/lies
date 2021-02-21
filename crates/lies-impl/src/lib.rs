@@ -33,18 +33,28 @@ lazy_static::lazy_static! {
 
 #[proc_macro_hack]
 pub fn licenses_text(_input: TokenStream) -> TokenStream {
-    emit_quote_cargo_about(include_bytes!("../templates/about.console.hbs"), "about.console.hbs")
+    emit_quote_cargo_about(include_bytes!("../templates/about.console.hbs"), "about.console.hbs", true)
 }
 
 #[proc_macro_hack]
 pub fn licenses_ansi(_input: TokenStream) -> TokenStream {
-    emit_quote_cargo_about(include_bytes!("../templates/about.ansi.hbs"), "about.ansi.hbs")
+    emit_quote_cargo_about(include_bytes!("../templates/about.ansi.hbs"), "about.ansi.hbs", true)
 }
 
-fn emit_quote_cargo_about(input_text: &[u8], input_name: &str) -> TokenStream {
+#[proc_macro_hack]
+pub fn licenses_html_page(_input: TokenStream) -> TokenStream {
+    emit_quote_cargo_about(include_bytes!("../templates/about.html.page.hbs"), "about.html.page.hbs", false)
+}
+
+#[proc_macro_hack]
+pub fn licenses_html_div(_input: TokenStream) -> TokenStream {
+    emit_quote_cargo_about(include_bytes!("../templates/about.html.div.hbs"), "about.html.div.hbs", false)
+}
+
+fn emit_quote_cargo_about(input_text: &[u8], input_name: &str, unhtml: bool) -> TokenStream {
     let cargo_lock      = WORKSPACE_DIR.join("Cargo.lock");
     let about_toml      = ensure_about_toml_exists();
-    let about_out_txt   = ensure_about_out_txt_exists(input_text, input_name, &cargo_lock, &about_toml);
+    let about_out_txt   = ensure_about_out_txt_exists(input_text, input_name, &cargo_lock, &about_toml, unhtml);
 
     let cargo_lock      = cargo_lock    .to_str().unwrap_or_else(|| fatal!(system, "Path to Cargo.lock contains invalid unicode: {}", cargo_lock.display()));
     let about_toml      = about_toml    .to_str().unwrap_or_else(|| fatal!(system, "Path to about.toml contains invalid unicode: {}", about_toml.display()));
@@ -96,7 +106,7 @@ fn ensure_about_toml_exists() -> PathBuf {
     path
 }
 
-fn ensure_about_out_txt_exists(input_text: &[u8], input_name: &str, cargo_lock: &PathBuf, about_toml: &PathBuf) -> PathBuf {
+fn ensure_about_out_txt_exists(input_text: &[u8], input_name: &str, cargo_lock: &PathBuf, about_toml: &PathBuf, unhtml: bool) -> PathBuf {
     let cargo_about = ensure_cargo_about_installed();
 
     let target_lies = CARGO_METADATA.target_directory.join("lies");
@@ -140,7 +150,7 @@ fn ensure_about_out_txt_exists(input_text: &[u8], input_name: &str, cargo_lock: 
         fatal!(system, "Failed to '{} about generate {}'\n{}", cargo_about.display(), tmp_template_path.display(), err)
     );
 
-    let output = reprocess(output.as_str());
+    let output = if unhtml { reprocess(output.as_str()) } else { output };
     fs::write(&about_out_txt, output).unwrap_or_else(|err| fatal!(system, "Failed to write {}: {}", about_out_txt.display(), err));
     about_out_txt
 }
