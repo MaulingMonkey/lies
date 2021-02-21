@@ -85,7 +85,8 @@ fn ensure_cargo_about_installed() -> PathBuf {
         None                                => { eprintln!("Installing cargo-about"); true },
         Some("0.0.1")                       => { eprintln!("Upgrading cargo-about"); true },
         Some(v) if v.starts_with("0.1.")    => false, // Expected version
-        Some(v)                             => { eprintln!("cargo-about {} may have breaking changes vs expected version 0.1.x", v); false }, // Newer (0.2.x?) but leave alone
+        Some(v) if v.starts_with("0.2.")    => false, // Expected version
+        Some(v)                             => { eprintln!("cargo-about {} may have breaking changes vs expected version 0.1.x or 0.2.x", v); false }, // Newer (0.3.x?) but leave alone
     };
 
     if install {
