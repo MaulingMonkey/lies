@@ -35,5 +35,9 @@
             "label": "Open local docs",
             "windows": { "command": "start \"\" target/doc/lies/index.html" }
         },
+        {
+            "label":    "help",
+            "command":  "cargo +nightly doc --no-deps -p lies --open",
+        },
     ]
 }
