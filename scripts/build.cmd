@@ -1,6 +1,6 @@
 @set ERRORS=0
 @pushd "%~dp0.."
-@call :cargo +nightly rustc -p example-console -- -Z external-macro-backtrace
+@call :cargo +nightly rustc -p example-console
 @call :cargo test
 @call :cargo doc --no-deps
 @if NOT "%ERRORS%" == "0" exit /b %ERRORS%
