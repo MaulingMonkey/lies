@@ -1,0 +1,42 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-ubuntu:
+    name: Ubuntu Latest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - 1.39.0
+          - stable
+          - beta
+          - nightly
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+        override: true
+    - name: Info
+      run: |
+        rustc -V
+        cargo -V
+    - name: Build
+      run: |
+        cargo build --all-targets
+        cargo test
+        cargo doc --no-deps
+        target/debug/example-console version
+        target/debug/example-console help
+        target/debug/example-console about
+        target/debug/example-console add 1 2 3
