@@ -16,8 +16,9 @@ proc-macro = true
 [dependencies]
 proc-macro-hack = "0.5"
 quote           = "1.0" # already depended upon by proc-macr-hack 0.5.11
-cargo_metadata  = "0.12"
 lazy_static     = "1.4"
+serde           = { version = "1", features = ["derive"] }
+serde_json      = "1"
 
 [features]
 about-per-crate     = []

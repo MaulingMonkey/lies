@@ -4,7 +4,10 @@ extern crate proc_macro;
 
 use proc_macro_hack::*;
 use proc_macro::*;
+
 use quote::quote;
+
+use serde::*;
 
 use std::ffi::*;
 use std::fs::{self, *};
@@ -12,10 +15,26 @@ use std::io::{self, Write};
 use std::path::*;
 use std::process::*;
 
+
+
 macro_rules! fatal {
     (user,      $($tt:tt)+) => {{ eprintln!($($tt)+); exit(1); }};
     (system,    $($tt:tt)+) => {{ eprintln!($($tt)+); exit(1); }};
     (bug,       $($tt:tt)+) => {{ eprintln!($($tt)+); eprintln!("This is a bug!  Please file an issue against https://github.com/MaulingMonkey/lies/issues if one doesn't already exist"); exit(1); }};
+}
+
+#[derive(Deserialize)] struct Metadata {
+    workspace_root:     PathBuf,
+    target_directory:   PathBuf,
+}
+
+impl Metadata {
+    fn get() -> Self {
+        let output = Command::new("cargo").args("metadata --format-version 1".split(' ')).stderr(Stdio::inherit()).output()
+            .unwrap_or_else(|err| fatal!(system, "unable to execute `cargo metadata --format-version 1`: {}", err));
+        if output.status.code() != Some(0) { fatal!(system, "error executing `cargo metadata --format-version 1`"); }
+        serde_json::from_slice(&output.stdout[..]).unwrap_or_else(|err| fatal!(bug, "error parsing `cargo metadata --format-version 1`: {}", err))
+    }
 }
 
 mod features {
@@ -25,7 +44,7 @@ mod features {
 
 lazy_static::lazy_static! {
     // NOTE:  I intentionally avoid listing most file paths here, to force you to use ensure_* methods to e.g. create them first.
-    static ref CARGO_METADATA       : cargo_metadata::Metadata  = cargo_metadata::MetadataCommand::new().exec().unwrap_or_else(|err| fatal!(system, "Failed to exec cargo metadata: {}", err));
+    static ref CARGO_METADATA       : Metadata                  = Metadata::get();
     static ref WORKSPACE_DIR        : PathBuf                   = CARGO_METADATA.workspace_root.clone();
     static ref CARGO_MANIFEST_DIR   : PathBuf                   = get_env_path("CARGO_MANIFEST_DIR");
     static ref ABOUT_TOML_DIR       : PathBuf                   = get_about_toml_dir();
